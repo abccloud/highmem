@@ -87,8 +87,19 @@ typedef struct
     }
 */
 extern hm_table_handle_t *alloc_table(void *base,uint32_t len,uint32_t thread_id,uint32_t table_type,uint32_t max_items,uint32_t item_size);
+/*after alloc_table then you may use update_index,the first index should unique*/
 extern int update_index(hm_table_handle_t *handle,int index_type,int key_offset,int key_len);
+
+/*if you have a value want to add to this table,you should use add_value*/
 extern int add_value(hm_table_handle_t *handle,void *p_item);
+
+/*get a free item node, we can store value on this directly*/
+extern void *get_afree_item(hm_table_handle_t *handle);
+/*return a free item node, we donot want to store value on it*/
+extern int ret_afree_item(hm_table_handle_t *handle,void *p_item);
+/*after fill the free item and add to table use add_value_from_afree*/
+extern int add_value_from_afree(hm_table_handle_t *handle,void *p_item);
+
 extern int find_from_key(hm_table_handle_t *handle,uint32_t index_ra,void *key,int *rtcount,hash_list_node_t **rtlist);
 extern int delete_value(hm_table_handle_t *handle,void *p_value);
 extern int free_rt_list(hash_list_node_t *rtlist);

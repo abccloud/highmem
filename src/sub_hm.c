@@ -196,22 +196,52 @@ int add_value(hm_table_handle_t *handle,void *p_item)
     }
 #endif
     /*get a empty value rom*/
+    void *p_e_value = get_afree_item(handle);
+    if(NULL == p_e_value)
+    {
+        return -3;
+    }
+    memcpy(p_e_value,p_item,handle->v_item_size);
+    return add_value_from_afree(handle,p_e_value);
+}
+void *get_afree_item(hm_table_handle_t *handle)
+{
+#if __CHECK__
+    if(NULL == handle)
+    {
+        return NULL;
+    }
+#endif
+    /*get a empty value rom*/
     if(NULL == handle->free_value_list)
     {
-        return -3;/*value is full*/
-    }
-    if(NULL == handle->hash_array_ptr[0])
-    {
-        return -4;/*no index now,you should use update_index first*/
+        return NULL;/*no free item value*/
     }
     value_list_t *p_empty_v = handle->free_value_list;
     handle->free_value_list = handle->free_value_list->next;
-
     p_empty_v->next = NULL;
-    uint8_t *p_tmp = ((uint8_t *)p_empty_v)+sizeof(value_list_t);
-    memcpy(p_tmp,p_item,handle->v_item_size);
-    build_index_for_item(handle,p_tmp);
+    return ((void *)p_empty_v)+sizeof(value_list_t);
+}
+/*return a free item node, we donot want to store value on it*/
+int ret_afree_item(hm_table_handle_t *handle,void *p_item)
+{
+#if __CHECK__
+    if((NULL == handle)||(NULL == p_item))
+    {
+        return NULL;
+    }
+#endif
+
+    value_list_t *p_empty_v = p_item-sizeof(value_list_t);
+    p_empty_v->next = handle->free_value_list;
+    handle->free_value_list = p_empty_v;
+    
     return 0;
+}
+/*after fill the free item and add to table use add_value_from_afree*/
+int add_value_from_afree(hm_table_handle_t *handle,void *p_item)
+{
+    return build_index_for_item(handle,p_item);
 }
 int find_from_key(hm_table_handle_t *handle,uint32_t index_ra,void *key,int *rtcount,hash_list_node_t **rtlist)
 {

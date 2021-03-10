@@ -187,7 +187,7 @@ int test_have_this_node(hm_table_handle_t * handle,int index_ra,struct student_t
     return -1;
 }
 
-int test_add(hm_table_handle_t * handle)
+int test_add(hm_table_handle_t * handle,int quick)
 {
     int ii = 0;
     char name[NAME_L] = {0,};
@@ -212,16 +212,35 @@ int test_add(hm_table_handle_t * handle)
             }
             name[rand_ii] = '\0';
         }
-        pstu = new_stu(ii+1,name,(ii+20)%100);
-        assert(NULL != pstu);
-        rc = add_value(handle,pstu);
+        if(quick)
+        {
+            pstu = get_afree_item(handle);
+            assert(NULL != pstu);
+            pstu->id = ii+1;
+            memcpy(pstu->name,name,NAME_L);
+            pstu->age = ii+20%100;
+            /*add to table,no memcpy in add_value_from_afree*/
+            rc = add_value_from_afree(handle,pstu);
+            /*if we get_afree_item and do not want to add,you should use 
+                            ret_afree_item(handle,pstu) to free it*/
+        }
+        else
+        {
+            pstu = new_stu(ii+1,name,ii+20%100);
+            assert(NULL != pstu);
+            /*we use memcpy to store the pstu value,so after that we should free it*/
+            rc = add_value(handle,pstu);
+        }
         if(rc < 0)
         {
             hm_printf("add_fail:%d %s %d,rc=%d\n",pstu->id,pstu->name,pstu->age,rc);
         }
         rc = test_have_this_node(handle,index_type_unique,pstu,1);
         assert(1 == rc);
-        free_stu(pstu);
+        if(!quick)
+        {
+            free_stu(pstu);/*free the pstu because we just store the value not the pointer*/
+        }
     }
     return ii;
 }
@@ -273,9 +292,9 @@ int main(int arc,char *argv[])
 
     /*you should first update_index and then use add del and find, after you use add, you cannot use update_index*/
     
-    test_add(handle);
+    test_add(handle,0);
     test_del(handle);
-    test_add(handle);
+    test_add(handle,1);
     test_find_uni(handle);
     test_find_multi(handle,index_type_multi);
     free(base);
