@@ -22,9 +22,83 @@ int calc_table_size(uint32_t max_items,uint32_t item_size)
     int value_erea_len = max_items*item_size_real;
     return head_len+value_erea_len;
 }
+
+#ifdef HASH_NODE_POOL
+
+void* hs_lh_pool_get(hm_table_handle_t *handle,size_t s)
+{
+#if __CHECK__
+    if(NULL == handle)
+    {
+        return NULL;
+    }
+    if(handle->hash_list_node_pool.sys_malloc_mem.p_value = NULL)
+    {
+        return NULL;
+    }
+    if(sizeof(hash_list_node_t)!=s)
+    {
+        return NULL;
+    }
+#endif
+    hash_list_node_t *node = NULL;
+    if(NULL == handle->hash_list_node_pool.pool_list)
+    {
+        void *p_newhm = hm_malloc(HASH_NODE_POOL_STEP*sizeof(hash_list_node_t));
+        if(NULL == p_newhm)
+        {
+            return NULL;
+        }
+        node = p_newhm;
+        node->p_value = p_newhm;/*we have HASH_NODE_POOL_STEP nodes and use 1*/
+        node->next = handle->hash_list_node_pool.sys_malloc_mem.next;
+        handle->hash_list_node_pool.sys_malloc_mem.next = node;
+        int ii = 0;
+        for(ii=1;ii<HASH_NODE_POOL_STEP;ii++)
+        {
+            node = p_newhm+ii*sizeof(hash_list_node_t);
+            node->p_value = NULL;
+            /*every node insert to head*/
+            node->next = handle->hash_list_node_pool.pool_list;
+            handle->hash_list_node_pool.pool_list = node;
+        }
+    }
+    node = handle->hash_list_node_pool.pool_list;
+    handle->hash_list_node_pool.pool_list = node->next;
+    return node;
+}
+void* hs_lh_pool_getzero(hm_table_handle_t *handle,size_t s,int num)
+{
+    hash_list_node_t *node = hs_lh_pool_get(handle,s);
+    if(NULL != node)
+    {
+        node->next = NULL;
+        node->p_value = NULL;
+    }
+    return node;
+}
+int hs_lh_pool_ret(hm_table_handle_t *handle,void *ptr)
+{
+#if __CHECK__
+    if(NULL == handle)
+    {
+        return -1;
+    }
+#endif
+    hash_list_node_t *node = ptr;
+    node->next = handle->hash_list_node_pool.pool_list;
+    handle->hash_list_node_pool.pool_list = node;
+    return 0;
+}
+
+#endif
+
+
+
 hm_table_handle_t *alloc_table(void *base,uint32_t len,uint32_t thread_id,uint32_t table_type,uint32_t max_items,uint32_t item_size)
 {
     uint8_t *p_tmp;
+    void *base_ori = base;
     value_list_t *p_value_list_node;
     int need_len = calc_table_size(max_items,item_size);
     if(NULL != base)
@@ -64,6 +138,28 @@ hm_table_handle_t *alloc_table(void *base,uint32_t len,uint32_t thread_id,uint32
     {
         handle->hash_array_ptr[ii] = NULL;
     }
+#ifdef HASH_NODE_POOL
+    handle->hash_list_node_pool.pool_list=NULL;
+    handle->hash_list_node_pool.sys_malloc_mem.next = NULL;
+    handle->hash_list_node_pool.sys_malloc_mem.p_value = hm_malloc(HASH_NODE_POOL_STEP*sizeof(hash_list_node_t));
+    if(NULL == handle->hash_list_node_pool.sys_malloc_mem.p_value)
+    {
+        if(NULL == base_ori)
+        {
+            hm_free(base);
+            handle= base = NULL;
+        }
+    }
+    hash_list_node_t *hnode = NULL;
+    for(ii=0;ii<HASH_NODE_POOL_STEP;ii++)
+    {
+        hnode = handle->hash_list_node_pool.sys_malloc_mem.p_value+ii*sizeof(hash_list_node_t);
+        hnode->p_value = NULL;
+        /*insert to head*/
+        hnode->next = handle->hash_list_node_pool.pool_list;
+        handle->hash_list_node_pool.pool_list = hnode;
+    }
+#endif
     return handle;
 }
 int update_index(hm_table_handle_t *handle,int index_type,int key_offset,int key_len)
@@ -102,7 +198,7 @@ int update_index(hm_table_handle_t *handle,int index_type,int key_offset,int key
     {
         return -5;
     }
-    handle->hash_array_ptr[index_ra0] = hs_lh_calloc(sizeof(index_hash_head_t)+hashsize(HASH_TABLE_ARRY_SIZE)*sizeof(hash_list_node_t *),1);
+    handle->hash_array_ptr[index_ra0] = hm_calloc(sizeof(index_hash_head_t)+hashsize(HASH_TABLE_ARRY_SIZE)*sizeof(hash_list_node_t *),1);
     if(NULL == handle->hash_array_ptr[index_ra0])
     {
         return -6;
@@ -140,7 +236,7 @@ int delete_index_for_item_line(hm_table_handle_t *handle,void *p_item,int index_
             {
                 node_pre->next = node_tmp;
             }
-            hs_lh_free(node_list);
+            hs_lh_free(handle,node_list);
             break;
         }
         node_pre = node_list;
@@ -158,7 +254,7 @@ int build_index_for_item_line(hm_table_handle_t *handle,void *p_item,int index_r
     }
     uint8_t *p_key = p_item+hash_head->key.k_offset;
     uint32_t hash_key = hashlittle(p_key,hash_head->key.k_len,0)&hashmask(HASH_TABLE_ARRY_SIZE);
-    hash_list_node_t *new_node = hs_lh_malloc(sizeof(hash_list_node_t));
+    hash_list_node_t *new_node = hs_lh_malloc(handle,sizeof(hash_list_node_t));
     if(NULL == new_node)
     {
         return -1;
@@ -228,7 +324,7 @@ int ret_afree_item(hm_table_handle_t *handle,void *p_item)
 #if __CHECK__
     if((NULL == handle)||(NULL == p_item))
     {
-        return NULL;
+        return -1;
     }
 #endif
 
@@ -278,7 +374,7 @@ int find_from_key(hm_table_handle_t *handle,uint32_t index_ra,void *key,int *rtc
 
             if(index_type_unique == hash_head->key.index_type)
             {
-                new_node = hs_lh_malloc(sizeof(hash_list_node_t));
+                new_node = hs_lh_malloc(handle,sizeof(hash_list_node_t));
                 if(NULL != new_node)
                 {
                     new_node->next = NULL;
@@ -296,7 +392,7 @@ int find_from_key(hm_table_handle_t *handle,uint32_t index_ra,void *key,int *rtc
             }
             else
             {
-                new_node = hs_lh_malloc(sizeof(hash_list_node_t));
+                new_node = hs_lh_malloc(handle,sizeof(hash_list_node_t));
                 if(NULL != new_node)
                 {
                     new_node->next = *rtlist;
@@ -332,13 +428,13 @@ int delete_value(hm_table_handle_t *handle,void *p_value)
     handle->free_value_list = p_v;
     return 0;
 }
-int free_rt_list(hash_list_node_t *rtlist)
+int free_rt_list(hm_table_handle_t *handle,hash_list_node_t *rtlist)
 {
     hash_list_node_t * pnode = NULL;
     while(NULL != rtlist)
     {
         pnode = rtlist->next;
-        hs_lh_free(rtlist);
+        hs_lh_free(handle,rtlist);
         rtlist = pnode;
     }
     return 0;

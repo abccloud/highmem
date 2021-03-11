@@ -2,15 +2,19 @@
 #define  __HM_INTERFACE_H__
 
 #include <stdint.h>
-/*if you want redefine uthash_malloc,uthash_free, you should define before ut[xxx].h*/
-
-#define   INDEX_T   uint32_t
 
 #define   MAX_HASH_INDEX           8
 
-#define  HASH_TABLE_ARRY_SIZE      24  /*I have 1<<HASH_TABLE_ARRY_SIZE hash_array*/
+#define  HASH_TABLE_ARRY_SIZE      23  /*I have 1<<HASH_TABLE_ARRY_SIZE hash_array*/
 
 #define   LITTLE_GAP               16
+
+#define HASH_NODE_POOL
+#define __CHECK__                  0
+
+#ifdef HASH_NODE_POOL
+#define HASH_NODE_POOL_STEP   1024
+#endif
 
 enum
 {
@@ -43,6 +47,14 @@ typedef struct
     hash_list_node_t *hash_arry[];
 }index_hash_head_t;
 
+#ifdef HASH_NODE_POOL
+typedef struct
+{
+    hash_list_node_t sys_malloc_mem;
+    hash_list_node_t *pool_list;
+}hash_list_node_pool_t;
+#endif
+
 #pragma pack (8)
 typedef struct
 {
@@ -51,7 +63,9 @@ typedef struct
     value_list_t *free_value_list;
 
     index_hash_head_t *hash_array_ptr[MAX_HASH_INDEX];
-    
+#ifdef HASH_NODE_POOL
+    hash_list_node_pool_t hash_list_node_pool;
+#endif
     uint32_t v_item_size;
     uint32_t v_item_size_real;
     uint32_t v_num;
@@ -63,9 +77,15 @@ typedef struct
 #define hm_calloc(sz,num)   calloc(sz,num)
 #define hm_free(ptr)        free(ptr)
 
-#define hs_lh_malloc(sz)       malloc(sz)
-#define hs_lh_calloc(sz,num)   calloc(sz,num)
-#define hs_lh_free(ptr)        free(ptr)
+#ifndef HASH_NODE_POOL
+#define hs_lh_malloc(h,sz)       malloc(sz)
+#define hs_lh_calloc(h,sz,num)   calloc(sz,num)
+#define hs_lh_free(h,ptr)        free(ptr)
+#else
+#define hs_lh_malloc(h,sz)       hs_lh_pool_get(h,sz)
+#define hs_lh_calloc(h,sz,num)   hs_lh_pool_getzero(h,sz,num)
+#define hs_lh_free(h,ptr)        hs_lh_pool_ret(h,ptr)
+#endif
 
 
 /*If base is NULL we will malloc for this table.
@@ -102,7 +122,7 @@ extern int add_value_from_afree(hm_table_handle_t *handle,void *p_item);
 
 extern int find_from_key(hm_table_handle_t *handle,uint32_t index_ra,void *key,int *rtcount,hash_list_node_t **rtlist);
 extern int delete_value(hm_table_handle_t *handle,void *p_value);
-extern int free_rt_list(hash_list_node_t *rtlist);
+extern int free_rt_list(hm_table_handle_t *handle,hash_list_node_t *rtlist);
 extern int show_rt_list(hash_list_node_t *rtlist);
 extern int calc_table_size(uint32_t max_items,uint32_t item_size);
 

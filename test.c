@@ -66,7 +66,7 @@ int test_find_uni(hm_table_handle_t * handle)
             pstu = listfind_tmp->p_value;
             listfind_tmp = listfind_tmp->next;
         }
-        free_rt_list(listfind);
+        free_rt_list(handle,listfind);
     }
     return 0;
 }
@@ -93,7 +93,7 @@ int test_find_multi(hm_table_handle_t * handle,int index_ra)
         hm_printf("list:(%s=%d %s %d),rt=%d,rc=%d\n",key,pstu->id,pstu->name,pstu->age,rtcount,rc);
         listfind_tmp = listfind_tmp->next;
     }
-    free_rt_list(listfind);
+    free_rt_list(handle,listfind);
 
     memset(key,0,NAME_L);
     strcpy(key,jims_none);
@@ -143,7 +143,7 @@ int test_have_this_node(hm_table_handle_t * handle,int index_ra,struct student_t
         {
             return -4;
         }
-        free_rt_list(listfind);
+        free_rt_list(handle,listfind);
         return 1;
     }
     else if(index_type_multi== index_ra)
@@ -177,7 +177,7 @@ int test_have_this_node(hm_table_handle_t * handle,int index_ra,struct student_t
             }
             listfind_tmp = listfind_tmp->next;
         }
-        free_rt_list(listfind);
+        free_rt_list(handle,listfind);
         if(NULL == listfind_tmp)
         {
             return 0;
@@ -267,7 +267,7 @@ int test_del(hm_table_handle_t * handle)
             assert(0 == test_have_this_node(handle,index_type_unique,pstu,0));
             listfind_tmp = listfind_tmp->next;
         }
-        free_rt_list(listfind);
+        free_rt_list(handle,listfind);
     }
     return ii;
 }
